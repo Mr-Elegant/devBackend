@@ -2,20 +2,62 @@ import connectDB from './config/database.js';
 import { User } from './models/user.js';
 import express from 'express';
 import dotenv from "dotenv";
+import { validateSignUpData } from './utils/validation.js';
+import bcrypt from 'bcrypt';
 const app = express();
 dotenv.config();
 
 app.use(express.json())
 
 app.post('/signup', async(req,res) => {
-    // creating instance of user model and passing the data from request body to it
-   const user = new User(req.body);
+  
+  // validate data through validator function in util
+   validateSignUpData(req);
+
+   const {firstName, lastName, emailId, password} = req.body;
+
+   // encrypt password using bcrypt
+   const passwordHash = await bcrypt.hash(password, 10);
+   console.log(passwordHash);
+
+   // creating User Instance
+   const user = new User({
+      firstName,
+      lastName,
+      emailId,
+      password: passwordHash,
+   }) 
+
    try {
      await user.save();
      res.send("User created successfully")
    } catch (error) {
      res.status(400).send("Error creating user: " + error.message)  
    }
+})
+
+// login user
+app.post("/login", async(req, res)=> {
+  try {
+    const {emailId, password} = req.body;
+  
+    const user = await User.findOne({emailId: emailId});
+    if(!user){
+      throw new Error("Invalid credentials");
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password)
+
+    if(isPasswordValid) { 
+      res.send("Login Sucessfull");
+    }
+    else{
+      res.send("Invalid credentials")
+    }
+
+  } catch (error) {
+      res.status(400).send("Error: " + error.message)
+  }
+
 })
 
 

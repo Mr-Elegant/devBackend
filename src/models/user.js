@@ -54,10 +54,10 @@ const userSchema = new Schema(
       type: String,
       default: "https://www.w3schools.com/howto/img_avatar.png",
       validate(value) {
-        if(!validator.isUrl(value)) {
-          throw new Error("Invalid image URL : " + value);
+        if (!validator.isURL(value)) {
+          throw new Error("Invalid Photo URL: " + value);
         }
-      }
+      },
     },
     about: {
       type: String,
