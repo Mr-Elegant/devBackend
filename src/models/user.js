@@ -1,4 +1,7 @@
 import mongoose, { Schema } from "mongoose";
+import validator from "validator";
+import bcrypt from "bcrypt";
+// import jwt from "jsonwebtoken";
 
 const userSchema = new Schema(
   {
@@ -17,10 +20,19 @@ const userSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
+      validate(value){
+        if(!validator.isEmail(value)){
+          throw new Error("Invalid email address : " + value);
+        }
+      }
     },
     password: {
       type: String,
       required: true,
+      // validate(value) {
+      //   if (!validator.isStrongPassword(value)) {
+      //     throw new Error("Enter a Strong Password: " + value);
+      // }
     },
     age: {
       type: Number,
@@ -41,11 +53,11 @@ const userSchema = new Schema(
     photoUrl: {
       type: String,
       default: "https://www.w3schools.com/howto/img_avatar.png",
-      // validate(value) {
-      //   if(!validator.isUrl(value)) {
-      //     throw new Error("Invalid URL : " + value);
-      //   }
-      // }
+      validate(value) {
+        if(!validator.isUrl(value)) {
+          throw new Error("Invalid image URL : " + value);
+        }
+      }
     },
     about: {
       type: String,
