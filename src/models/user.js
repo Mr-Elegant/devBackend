@@ -1,7 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import validator from "validator";
 import bcrypt from "bcrypt";
-// import jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 const userSchema = new Schema(
   {
@@ -71,5 +71,27 @@ const userSchema = new Schema(
     timestamps: true,
   }
 );
+
+
+// dont use arrow function in userSchema function otherwise it will break bcz of (this)
+userSchema.methods.getJWT = async function () {
+  const user = this;
+
+  const token = jwt.sign({_id: user._id}, process.env.JWT_SECRET);
+
+  return token;
+}
+
+userSchema.methods.validatePassword = async function (passwordInputByUser) {
+  const user = this;
+  const passwordHash = user.password;
+
+  const isPasswordValid = await bcrypt.compare(passwordInputByUser,passwordHash)
+
+  return isPasswordValid;
+}
+
+
+
 
 export const User = mongoose.model("User", userSchema);

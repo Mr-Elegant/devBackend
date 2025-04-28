@@ -4,10 +4,15 @@ import express from 'express';
 import dotenv from "dotenv";
 import { validateSignUpData } from './utils/validation.js';
 import bcrypt from 'bcrypt';
+import cookieParser from 'cookie-parser';
+import jwt from "jsonwebtoken";
+import userAuth from './middleware/auth.js';
+
 const app = express();
 dotenv.config();
 
 app.use(express.json())
+app.use(cookieParser())
 
 app.post('/signup', async(req,res) => {
   
@@ -45,20 +50,42 @@ app.post("/login", async(req, res)=> {
     if(!user){
       throw new Error("Invalid credentials");
     }
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+
+    // (validatePassword()) is coming from User model functions
+    const isPasswordValid = await user.validatePassword(password);
 
     if(isPasswordValid) { 
-      res.send("Login Sucessfull");
-    }
-    else{
-      res.send("Invalid credentials")
-    }
 
+      // generating a jwt token  (getJWT method is coming from User model methods )
+      const token = await user.getJWT();
+      console.log(token)
+
+      // add the token to the cookie and send response back to the user
+      res.cookie("token", token);
+      res.send("Login Sucessfull");
+    }else{
+      throw new Error("Invalid credentials");
+    }
   } catch (error) {
       res.status(400).send("Error: " + error.message)
   }
 
 })
+
+
+
+app.get("/profile", userAuth,  async (req, res) => {
+  try {
+    const user = req.user;
+  
+    res.send(user)
+    
+  } catch (error) {
+      res.status(400).send("Error: " + error.message)
+  }
+})
+
+
 
 
 // get user by email
@@ -77,31 +104,15 @@ app.get("/user", async (req, res) => {
     }
 })
 
-// Feed Api - GET /feed - get all the users from the database
-app.get("/feed", async (req, res)=> {
-  try {
-    const users = await User.find({});
-    if(users.length === 0) {
-      res.status(404).send("No users found");
-    }
-    res.send(users);
-  } catch (error) {
-      res.status(400).send("Something went wrong");
-  }
+
+app.post("/sendConnectionRequest", userAuth, async(req,res)=> {
+
+  // sending a connection request
+  console.log("Sending a connection request");
+
+  res.send("Connection Request Send!");
 })
 
-// delete user by id
-app.delete("/user", async (req, res) => {
-  const userId = req.body.userId;
-
-  try {
-    // const user = await User.findByIdAndDelete({_id : userId});
-    const user = await User.findByIdAndDelete(userId);
-    res.send("user deleted successfully");
-  } catch (error) {
-    res.status(400).send("Something went wrong");
-  }
-})
 
 
 // patch user
