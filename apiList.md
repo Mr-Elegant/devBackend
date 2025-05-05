@@ -8,11 +8,10 @@
 ==> profile Routes
 - GET /profile/view
 - PATCH /profile/edit
-- PATCH /profile/password
+- PATCH /profile/updatePassword
 
 ==> Connection requests
-- POST /request/send/interested/:userId
-- POST /request/send/ignored/:userId
+- POST /request/send/:status/:userId          (status: ("ignored" or "interested"))
 - POST /request/review/accepted/:requestId
 - POST /request/review/rejected/:requestId
 
