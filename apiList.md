@@ -12,12 +12,12 @@
 
 ==> Connection requests
 - POST /request/send/:status/:userId          (status: ("ignored" or "interested"))
-- POST /request/review/accepted/:requestId
-- POST /request/review/rejected/:requestId
+- POST /request/review/:accepted/:requestId    (status: ("accepted" or "rejected"))  
+
 
 ==>  user feed Connections Routes
-- GET /user/connections
 - GET /user/requests/received
+- GET /user/connections
 - GET /user/feed - Gets you the profiles of other devs
 
 Status: ignore, interested, accepted, rejected
