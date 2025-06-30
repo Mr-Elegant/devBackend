@@ -27,25 +27,36 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
   }
 });
 
+
+// retrieves all accepted connection requests for the logged-in user, returning the list of connected users.
 userRouter.get("/user/connections", userAuth, async (req, res) => {
   try {
+    // Get the currently logged-in user from the request object (set by userAuth)
     const loggedInUser = req.user;
 
+    // Find all accepted connection requests where the logged-in user is either the sender or receiver
     const connectionRequests = await ConnectionRequest.find({
       $or: [
+        // Case 1: The user received the request and it was accepted
         { toUserId: loggedInUser._id, status: "accepted" },
+        // Case 2: The user sent the request and it was accepted
         { fromUserId: loggedInUser._id, status: "accepted" },
       ],
     })
+        // Populate sender user info (safe fields only)
       .populate("fromUserId", USER_SAFE_DATA)
+      // Populate receiver user info (safe fields only)
       .populate("toUserId", USER_SAFE_DATA);
 
     // console.log(connectionRequests); 
 
+    // Transform the connectionRequests into a list of "other users" (the ones connected to logged-in user)
     const data = connectionRequests.map((row) => {
-      if (row.fromUserId.toString() === loggedInUser._id.toString()) {
+      // If the logged-in user is the sender, return the receiver's user data
+      if (row.fromUserId._id.toString() === loggedInUser._id.toString()) {
         return row.toUserId;
       }
+      // Otherwise, return the sender's user data
       return row.fromUserId;
     });
 
