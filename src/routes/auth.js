@@ -5,11 +5,9 @@ import bcrypt from 'bcrypt';
 import { validateSignUpData } from "../utils/validation.js";
 
 
-
-
-
 authRouter.post('/signup', async(req,res) => {
   
+  try {
   // validate data through validator function in util
    validateSignUpData(req);
 
@@ -27,12 +25,18 @@ authRouter.post('/signup', async(req,res) => {
       password: passwordHash,
    }) 
 
-   try {
-     await user.save();
-     res.send("User created successfully")
-   } catch (error) {
-     res.status(400).send("Error creating user: " + error.message)  
-   }
+   
+     const savedUser = await user.save();
+    const token = await savedUser.getJWT();
+
+    res.cookie("token", token, {
+      expires: new Date(Date.now() + 8 * 3600000),
+    });
+
+    res.json({ message: "User Added successfully!", data: savedUser });
+  } catch (err) {
+    res.status(400).send("ERROR : " + err.message);
+  }
 })
 
 
