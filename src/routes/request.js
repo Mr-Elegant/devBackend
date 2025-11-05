@@ -4,11 +4,14 @@ const requestRouter = express.Router();
 import userAuth from "../middleware/auth.js";
 import ConnectionRequest from "../models/connectionRequest.js";
 import {User} from "../models/user.js";
+// import {run as sendEmail } from "../utils/sendEmail.js";
+import {run} from "../utils/sendEmail.js";
 
  
 
 // Route: Send a connection request with a status ("ignored" or "interested")
 requestRouter.post("/request/send/:status/:toUserId" , userAuth, async(req,res)=> {
+
     try {
         // Extract user IDs and status from the request
         const fromUserId = req.user._id;
@@ -46,6 +49,12 @@ requestRouter.post("/request/send/:status/:toUserId" , userAuth, async(req,res)=
         })
 
         const data = await connectionRequest.save();
+
+        const emailRes = await run(
+            "A new friend request from " + req.user.firstName, req.user.firstName + " is " + status + " in " + toUser.firstName
+        )
+        console.log(emailRes);
+
 
         res.json({
             message: req.user.firstName + " is " + status + " in " + toUser.firstName,
