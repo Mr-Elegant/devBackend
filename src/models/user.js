@@ -50,6 +50,13 @@ const userSchema = new Schema(
       //   }
       // },
     },
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
+    membershipType: {
+      type: String,
+    },
     photoUrl: {
       type: String,
       default: "https://www.w3schools.com/howto/img_avatar.png",

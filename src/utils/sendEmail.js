@@ -1,6 +1,6 @@
 
 import {SendEmailCommand} from "@aws-sdk/client-ses";
-import sesClient from "./sesClient.js";
+import sesClient from "./sesClient.js"
 
 const createSendEmailCommand = (toAddress, fromAddress, subject, body) => {
   return new SendEmailCommand({

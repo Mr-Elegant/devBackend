@@ -12,13 +12,14 @@ import express from 'express';
 const app = express();
 import cookieParser from 'cookie-parser';
 import cors from "cors"
+import cron from 'node-cron'
 
 
 import authRouter from './routes/auth.js';
 import profileRouter from './routes/profile.js';
 import requestRouter from './routes/request.js';
 import userRouter from './routes/user.js';
-
+import paymentRouter from "./routes/payment.js";
 
 app.use(express.json())
 app.use(cookieParser())
@@ -30,7 +31,8 @@ app.use(cors({
 app.use("/", authRouter);
 app.use("/", profileRouter);
 app.use("/", requestRouter);
-app.use("/", userRouter)
+app.use("/", userRouter);
+app.use("/", paymentRouter); 
 
 
 
