@@ -8,11 +8,16 @@ import { validateWebhookSignature } from "razorpay/dist/utils/razorpay-utils.js"
 
 const paymentRouter = express.Router();
 
+/**
+ * CREATE PAYMENT ORDER
+ * Protected route – only logged-in users
+ */
 paymentRouter.post("/payment/create", userAuth, async (req, res) => {
   try {
     const { membershipType } = req.body;
     const { firstName, lastName, emailId } = req.user;
 
+    // Create Razorpay order
     const order = await razorpayInstance.orders.create({
       amount: membershipAmount[membershipType] * 100,
       currency: "INR",
@@ -27,6 +32,7 @@ paymentRouter.post("/payment/create", userAuth, async (req, res) => {
 
     console.log(order);
 
+     // Save order details in DB
     const payment = new Payment({
       userId: req.user._id,
       orderId: order.id,
@@ -39,20 +45,25 @@ paymentRouter.post("/payment/create", userAuth, async (req, res) => {
 
     const savedPayment = await payment.save();
 
-    // returning back to frontend page
-    // res.json({order});
+   // Send order + Razorpay key to frontend
     res.json({ ...savedPayment.toJSON(), keyId: process.env.RAZORPAY_KEY_ID });
   } catch (err) {
     return res.status(500).json({ msg: err.message });
   }
 });
 
+
+/**
+ * RAZORPAY WEBHOOK
+ * Confirms payment authenticity & updates DB
+ */
 paymentRouter.post("/payment/webhook", async (req, res) => {
   try {
     console.log("Razorpay Webhook Called");
     const webhookSignature = req.get("X-Razorpay-Signature");
     console.log("Webhook Signature", webhookSignature);
 
+     // Verify webhook signature
     const isWebhookValid = validateWebhookSignature(
       JSON.stringify(req.body),
       webhookSignature,
@@ -76,6 +87,7 @@ paymentRouter.post("/payment/webhook", async (req, res) => {
     await payment.save();
     console.log("Payment Saved");
 
+    // Upgrade user to premium
     const user = await User.findOne({ _id: payment.userId });
     user.isPremium = true;
     user.membershipType = payment.notes.membershipType;
@@ -89,6 +101,10 @@ paymentRouter.post("/payment/webhook", async (req, res) => {
   }
 });
 
+
+/**
+ * VERIFY PREMIUM STATUS
+ */
 paymentRouter.get("/premium/verify", userAuth, async (req, res) => {
   const user = req.user.toJSON();
   console.log("user inside verification ", user);
