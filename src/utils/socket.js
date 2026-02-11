@@ -59,7 +59,6 @@ const initializeSocket = (server) => {
 
     /**
      * ✅ MARK MESSAGES AS DELIVERED
-     * Called when user opens chat
      */
     socket.on("messagesDelivered", async ({ chatId, roomId, userId }) => {
       if (!chatId || !roomId || !userId) return;
@@ -72,17 +71,12 @@ const initializeSocket = (server) => {
 
         let updated = false;
 
-        // Find and update all messages that need to be marked as delivered
         chat.messages.forEach((msg) => {
-          // Only update messages that:
-          // 1. Were NOT sent by the current user (userId)
-          // 2. Are still in "sent" status
           if (msg.senderId.toString() !== userId && msg.status === "sent") {
             msg.status = "delivered";
             msg.deliveredAt = new Date();
             updated = true;
 
-            // Emit update for each message
             io.to(roomId).emit("updateMessageStatus", {
               messageId: msg._id.toString(),
               status: "delivered",
@@ -102,7 +96,43 @@ const initializeSocket = (server) => {
     });
 
     /**
-     * MESSAGE SEEN
+     * ✅ MARK EXISTING MESSAGES AS SEEN
+     * Called when user opens the chat page
+     */
+    socket.on("markMessagesSeen", async ({ chatId, roomId, userId }) => {
+      if (!chatId || !roomId || !userId) return;
+
+      try {
+        const chat = await Chat.findById(chatId);
+        if (!chat) return;
+
+        let updated = false;
+
+        chat.messages.forEach((msg) => {
+          // Upgrade any unread message to "seen"
+          if (msg.senderId.toString() !== userId && msg.status !== "seen") {
+            msg.status = "seen";
+            msg.seenAt = new Date();
+            updated = true;
+
+            io.to(roomId).emit("updateMessageStatus", {
+              messageId: msg._id.toString(),
+              status: "seen",
+            });
+          }
+        });
+
+        if (updated) {
+          await chat.save();
+          console.log(`Chat ${chatId} saved with 'seen' statuses`);
+        }
+      } catch (error) {
+        console.error("Error marking messages as seen:", error);
+      }
+    });
+
+    /**
+     * MESSAGE SEEN (Individual)
      */
     socket.on("messageSeen", async ({ chatId, messageId, roomId }) => {
       if (!chatId || !messageId || !roomId) return;
