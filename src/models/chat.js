@@ -17,12 +17,6 @@ const messageSchema = new Schema(
         image: {
             type: String,
         },
-        /**
-   * MESSAGE STATUS
-   * sent      -> saved in DB
-   * delivered -> received by other user
-   * seen      -> read by other user
-   */
         status: {
             type: String,
             enum: ["sent", "delivered", "seen"],
@@ -32,17 +26,6 @@ const messageSchema = new Schema(
             type: Date,
             default: null,
         },
-        status: {
-            type: String,
-            enum: ["sent", "delivered", "seen"],
-            default: "sent"
-        },
-         // When delivered to recipient
-        deliveredAt: {
-            type: Date,
-            default: null,
-        },
-        // When seen by recipient
         seenAt: {
             type: Date,
             default: null,

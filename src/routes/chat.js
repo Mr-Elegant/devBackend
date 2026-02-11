@@ -17,56 +17,63 @@ export const getSecretRoomId = (userId, targetUserId) =>
 
 /**
  * GET OR CREATE CHAT
- * Identity = participants (THIS PART IS CORRECT)
  */
 chatRouter.get("/chat/:targetUserId", userAuth, async (req, res) => {
-  const { targetUserId } = req.params;
-  const userId = req.user._id;
+  try {
+    const { targetUserId } = req.params;
+    const userId = req.user._id;
 
-  let chat = await Chat.findOne({
-    participants: { $all: [userId, targetUserId] },
-  })
-    .populate("messages.senderId", "firstName lastName")
-    .populate("participants", "firstName lastName");
+    let chat = await Chat.findOne({
+      participants: { $all: [userId, targetUserId] },
+    })
+      .populate("messages.senderId", "firstName lastName")
+      .populate("participants", "firstName lastName");
 
-  if (!chat) {
-    chat = await Chat.create({
-      participants: [userId, targetUserId],
-      messages: [],
-    });
-  }
+    if (!chat) {
+      chat = await Chat.create({
+        participants: [userId, targetUserId],
+        messages: [],
+      });
 
-  /**
-   * OFFLINE DELIVERY FIX (CRITICAL)
-   * Mark messages as delivered when receiver opens chat
-   */
-  await Chat.updateOne(
-    { _id: chat._id },
-    {
-      $set: {
-        "messages.$[msg].status": "delivered",
-        "messages.$[msg].deliveredAt": new Date(),
-      },
-    },
-    {
-      arrayFilters: [
-        {
-          "msg.senderId": { $ne: userId },
-          "msg.status": "sent",
-        },
-      ],
+      // Populate after creation
+      chat = await Chat.findById(chat._id)
+        .populate("messages.senderId", "firstName lastName")
+        .populate("participants", "firstName lastName");
     }
-  );
 
-  chat = await Chat.findById(chat._id).populate(
-    "messages.senderId",
-    "firstName lastName"
-  );
+    // ✅ Mark messages as delivered (REST fallback)
+    // This ensures delivery even if Socket.IO fails
+    await Chat.updateOne(
+      { _id: chat._id },
+      {
+        $set: {
+          "messages.$[msg].status": "delivered",
+          "messages.$[msg].deliveredAt": new Date(),
+        },
+      },
+      {
+        arrayFilters: [
+          {
+            "msg.senderId": { $ne: userId },
+            "msg.status": "sent",
+          },
+        ],
+      }
+    );
 
-  res.json({
-    chat,
-    roomId: getSecretRoomId(userId, targetUserId), // 🔑 frontend uses THIS
-  });
+    // Fetch updated chat
+    chat = await Chat.findById(chat._id)
+      .populate("messages.senderId", "firstName lastName")
+      .populate("participants", "firstName lastName");
+
+    res.json({
+      chat,
+      roomId: getSecretRoomId(userId, targetUserId),
+    });
+  } catch (error) {
+    console.error("Error fetching chat:", error);
+    res.status(500).json({ message: "Failed to fetch chat" });
+  }
 });
 
 export default chatRouter;
