@@ -1,6 +1,9 @@
 import { Server } from "socket.io";
 import { Chat } from "../models/chat.js";
 
+// ✅ NEW: Global map to track who is currently connected
+const userSocketMap = new Map();
+
 const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
@@ -20,6 +23,27 @@ const initializeSocket = (server) => {
       socket.join(roomId);
       console.log(`Socket ${socket.id} joined room ${roomId}`);
     });
+
+    /**
+     * ✅ NEW: REGISTER USER ONLINE STATUS
+     */
+    socket.on("registerUser", (userId) => {
+      userSocketMap.set(userId, socket.id);
+      // Tell everyone this user just came online
+      io.emit("userOnline", userId); 
+      console.log(`User ${userId} is Online`);
+    });
+
+
+    /**
+     * ✅ NEW: CHECK IF TARGET USER IS ONLINE
+     */
+    socket.on("checkOnlineStatus", (targetUserId) => {
+      const isOnline = userSocketMap.has(targetUserId);
+      socket.emit("onlineStatus", { userId: targetUserId, isOnline });
+    });
+
+
 
     /**
      * SEND MESSAGE
@@ -179,6 +203,25 @@ const initializeSocket = (server) => {
      */
     socket.on("disconnect", () => {
       console.log(`Socket ${socket.id} disconnected`);
+
+      // ✅ NEW: Find the user who disconnected and remove them from the map
+      let disconnectedUserId = null;
+      for (let [id, sId] of userSocketMap.entries()) {
+        if (sId === socket.id) {
+          disconnectedUserId = id;
+          userSocketMap.delete(id);
+          break;
+        }
+      }
+      // Tell everyone this user went offline
+      if (disconnectedUserId) {
+        io.emit("userOffline", disconnectedUserId);
+        console.log(`User ${disconnectedUserId} went Offline`);
+      }
+
+
+
+
     });
   });
 
