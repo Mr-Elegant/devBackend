@@ -1,7 +1,8 @@
 import { Server } from "socket.io";
 import { Chat } from "../models/chat.js";
+import crypto from "crypto";
 
-// ✅ NEW: Global map to track who is currently connected
+// ✅ Global map to track who is currently connected
 const userSocketMap = new Map();
 
 const initializeSocket = (server) => {
@@ -15,9 +16,6 @@ const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.id}`);
 
-    /**
-     * JOIN PRIVATE ROOM
-     */
     socket.on("joinChat", ({ roomId }) => {
       if (!roomId) return;
       socket.join(roomId);
@@ -25,32 +23,88 @@ const initializeSocket = (server) => {
     });
 
     /**
-     * ✅ NEW: REGISTER USER ONLINE STATUS
+     * REGISTER USER ONLINE STATUS & CATCH UP DELIVERIES
      */
-    socket.on("registerUser", (userId) => {
+    socket.on("registerUser", async (userId) => {
       userSocketMap.set(userId, socket.id);
-      // Tell everyone this user just came online
       io.emit("userOnline", userId); 
       console.log(`User ${userId} is Online`);
+
+      // 👈 2. NEW: OFFLINE DELIVERY CATCH-UP ROUTINE
+      try {
+        // Find chats where this user has pending 'sent' messages from OTHERS
+        const chats = await Chat.find({
+          participants: userId,
+          messages: { $elemMatch: { senderId: { $ne: userId }, status: "sent" } }
+        });
+
+        for (const chat of chats) {
+          const otherUserId = chat.participants.find((p) => p.toString() !== userId.toString());
+          if (!otherUserId) continue;
+
+          // Recreate the secret room ID
+          const roomId = crypto
+            .createHash("sha256")
+            .update([userId.toString(), otherUserId.toString()].sort().join("$"))
+            .digest("hex");
+
+          // Emit updates back to the sender for every missed message
+          chat.messages.forEach((msg) => {
+            if (msg.senderId.toString() !== userId.toString() && msg.status === "sent") {
+              const payload = {
+                messageId: msg._id.toString(),
+                status: "delivered",
+              };
+
+              // Update the sender's active chat window
+              io.to(roomId).emit("updateMessageStatus", payload);
+
+              // Update the sender's global app status (if they are on the Feed)
+              const senderSocketId = userSocketMap.get(msg.senderId.toString());
+              if (senderSocketId) {
+                io.to(senderSocketId).emit("updateMessageStatus", payload);
+              }
+            }
+          });
+        }
+
+        // Atomically update the database to mark them all as delivered
+        if (chats.length > 0) {
+          await Chat.updateMany(
+            { participants: userId },
+            {
+              $set: {
+                "messages.$[msg].status": "delivered",
+                "messages.$[msg].deliveredAt": new Date(),
+              }
+            },
+            {
+              arrayFilters: [
+                { "msg.senderId": { $ne: userId }, "msg.status": "sent" }
+              ]
+            }
+          );
+          console.log(`✅ Caught up offline deliveries for user ${userId}`);
+        }
+      } catch (error) {
+        console.error("Error catching up offline messages:", error);
+      }
     });
 
-
-    /**
-     * ✅ NEW: CHECK IF TARGET USER IS ONLINE
-     */
     socket.on("checkOnlineStatus", (targetUserId) => {
       const isOnline = userSocketMap.has(targetUserId);
       socket.emit("onlineStatus", { userId: targetUserId, isOnline });
     });
 
-
-
     /**
      * SEND MESSAGE
      */
     socket.on("sendMessage", async (data) => {
+      // 👈 NEW: Extract imageUrl from the incoming data
       const { chatId, roomId, userId, text, firstName, lastName } = data;
-      if (!chatId || !roomId || !text) return;
+
+      // Allow sending either text OR an image (or both)
+        if (!chatId || !roomId || (!text && !imageUrl)) return;
 
       try {
         const chat = await Chat.findById(chatId);
@@ -65,7 +119,7 @@ const initializeSocket = (server) => {
         await chat.save();
         const msg = chat.messages.at(-1);
 
-        io.to(roomId).emit("messageReceived", {
+        const payload = {
           _id: msg._id,
           senderId: userId,
           firstName,
@@ -73,23 +127,107 @@ const initializeSocket = (server) => {
           text: msg.text,
           createdAt: msg.createdAt,
           status: msg.status,
-        });
+          chatId,
+          roomId,
+        };
 
-        console.log(`Message sent to room ${roomId}`);
+        // ✅ CRITICAL FIX: Chain the targets together! 
+        // Socket.io will automatically deduplicate so users only get 1 message.
+        let emitTargets = io.to(roomId);
+
+        const targetUserId = chat.participants.find(
+          (p) => p.toString() !== userId.toString()
+        );
+        
+        if (targetUserId) {
+          const receiverGlobalSocketId = userSocketMap.get(targetUserId.toString());
+          if (receiverGlobalSocketId) {
+            emitTargets = emitTargets.to(receiverGlobalSocketId);
+          }
+        }
+        // Emit exactly ONCE to the combined targets
+        emitTargets.emit("messageReceived", payload);
+
+        console.log(`Message sent to room ${roomId}`)
+
       } catch (error) {
         console.error("Error sending message:", error);
       }
     });
 
-    /**
-     * ✅ MARK MESSAGES AS DELIVERED
+/**
+     * ✅ MARK SINGLE MESSAGE AS DELIVERED
      */
+    socket.on("markMessageDelivered", async ({ chatId, messageId, roomId }) => {
+      if (!chatId || !messageId || !roomId) return;
+
+      try {
+        // 🔒 ATOMIC FIX: Use $elemMatch to ensure we target the EXACT message AND its status!
+        const result = await Chat.updateOne(
+          {
+            _id: chatId,
+            messages: { $elemMatch: { _id: messageId, status: "sent" } },
+          },
+          {
+            $set: {
+              "messages.$.status": "delivered",
+              "messages.$.deliveredAt": new Date(),
+            },
+          }
+        );
+
+        // modifiedCount is 1 if it successfully found the message and updated it
+        if (result.modifiedCount) {
+          io.to(roomId).emit("updateMessageStatus", {
+            messageId: messageId,
+            status: "delivered",
+          });
+          console.log(`Message ${messageId} marked as delivered`);
+        }   
+      } catch (error) {
+        console.error("Error marking message delivered:", error);
+      }  
+    });
+
+
+    /**
+     * ✅ MESSAGE SEEN 
+     */
+    socket.on("messageSeen", async ({ chatId, messageId, roomId }) => {
+      if (!chatId || !messageId || !roomId) return;
+
+      try {
+        // 🔒 ATOMIC FIX: Prevent MongoDB from accidentally updating the wrong array element!
+        const result = await Chat.updateOne(
+          { 
+            _id: chatId, 
+            messages: { $elemMatch: { _id: messageId, status: { $ne: "seen" } } } 
+          },
+          {
+            $set: {
+              "messages.$.status": "seen",
+              "messages.$.seenAt": new Date(),
+            },
+          }
+        );
+
+        if (result.modifiedCount) {
+          io.to(roomId).emit("updateMessageStatus", {
+            messageId,
+            status: "seen",
+          });
+          console.log(`Message ${messageId} marked as seen`);
+        }
+      } catch (error) {
+        console.error("Error marking message as seen:", error);
+      }
+    });
+
+
     socket.on("messagesDelivered", async ({ chatId, roomId, userId }) => {
       if (!chatId || !roomId || !userId) return;
 
       try {
-        console.log(`Marking messages as delivered for chatId: ${chatId}, userId: ${userId}`);
-
         const chat = await Chat.findById(chatId);
         if (!chat) return;
 
@@ -105,24 +243,17 @@ const initializeSocket = (server) => {
               messageId: msg._id.toString(),
               status: "delivered",
             });
-
-            console.log(`Message ${msg._id} marked as delivered`);
           }
         });
 
         if (updated) {
           await chat.save();
-          console.log(`Chat ${chatId} saved with delivered status`);
         }
       } catch (error) {
         console.error("Error marking messages as delivered:", error);
       }
     });
 
-    /**
-     * ✅ MARK EXISTING MESSAGES AS SEEN
-     * Called when user opens the chat page
-     */
     socket.on("markMessagesSeen", async ({ chatId, roomId, userId }) => {
       if (!chatId || !roomId || !userId) return;
 
@@ -133,7 +264,6 @@ const initializeSocket = (server) => {
         let updated = false;
 
         chat.messages.forEach((msg) => {
-          // Upgrade any unread message to "seen"
           if (msg.senderId.toString() !== userId && msg.status !== "seen") {
             msg.status = "seen";
             msg.seenAt = new Date();
@@ -148,63 +278,25 @@ const initializeSocket = (server) => {
 
         if (updated) {
           await chat.save();
-          console.log(`Chat ${chatId} saved with 'seen' statuses`);
         }
       } catch (error) {
         console.error("Error marking messages as seen:", error);
       }
     });
 
-    /**
-     * MESSAGE SEEN (Individual)
-     */
-    socket.on("messageSeen", async ({ chatId, messageId, roomId }) => {
-      if (!chatId || !messageId || !roomId) return;
 
-      try {
-        console.log(`Marking message ${messageId} as seen`);
 
-        const result = await Chat.updateOne(
-          { _id: chatId, "messages._id": messageId },
-          {
-            $set: {
-              "messages.$.status": "seen",
-              "messages.$.seenAt": new Date(),
-            },
-          }
-        );
-
-        if (result.modifiedCount) {
-          io.to(roomId).emit("updateMessageStatus", {
-            messageId,
-            status: "seen",
-          });
-
-          console.log(`Message ${messageId} marked as seen, emitted to room ${roomId}`);
-        }
-      } catch (error) {
-        console.error("Error marking message as seen:", error);
-      }
-    });
-
-    /**
-     * TYPING INDICATOR
-     */
     socket.on("typing", ({ roomId, firstName }) => {
       socket.to(roomId).emit("userTyping", { firstName });
-    });
+    })
 
     socket.on("stopTyping", ({ roomId }) => {
       socket.to(roomId).emit("userStopTyping");
-    });
+    })
 
-    /**
-     * DISCONNECT
-     */
     socket.on("disconnect", () => {
       console.log(`Socket ${socket.id} disconnected`);
 
-      // ✅ NEW: Find the user who disconnected and remove them from the map
       let disconnectedUserId = null;
       for (let [id, sId] of userSocketMap.entries()) {
         if (sId === socket.id) {
@@ -213,15 +305,11 @@ const initializeSocket = (server) => {
           break;
         }
       }
-      // Tell everyone this user went offline
+      
       if (disconnectedUserId) {
         io.emit("userOffline", disconnectedUserId);
         console.log(`User ${disconnectedUserId} went Offline`);
       }
-
-
-
-
     });
   });
 
