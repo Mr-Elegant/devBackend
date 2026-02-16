@@ -12,10 +12,11 @@ const messageSchema = new Schema(
           // Message content
         text: {
             type: String,
-            required : true,
+            default: "", // Allow empty text if they just send an image
         },
         image: {
             type: String,
+            
         },
         status: {
             type: String,
