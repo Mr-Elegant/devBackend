@@ -16,7 +16,15 @@ const messageSchema = new Schema(
         },
         image: {
             type: String,
-            
+            default: "",
+        },
+        fileUrl: {
+            type: String,
+            default: "",
+        },
+        fileName: {
+            type: String,
+            default: "",
         },
         status: {
             type: String,

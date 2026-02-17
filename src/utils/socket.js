@@ -112,10 +112,10 @@ const initializeSocket = (server) => {
      */
     socket.on("sendMessage", async (data) => {
       // 1. MUST extract imageUrl here
-      const { chatId, roomId, userId, text, imageUrl, firstName, lastName } = data;
+      const { chatId, roomId, userId, text, imageUrl, fileUrl, fileName, firstName, lastName } = data;
       
       // Allow sending either text OR an image
-      if (!chatId || !roomId || (!text && !imageUrl)) return;
+      if (!chatId || !roomId || (!text && !imageUrl && !fileUrl)) return;
 
       try {
         const chat = await Chat.findById(chatId);
@@ -125,6 +125,8 @@ const initializeSocket = (server) => {
           senderId: userId,
           text: text || "",
           image: imageUrl || "",  // 2. MUST save imageUrl to the DB
+          fileUrl: fileUrl || "",
+          fileName: fileName || "",
           status: "sent",
         });
 
@@ -138,6 +140,8 @@ const initializeSocket = (server) => {
           lastName,
           text: msg.text,
           image: msg.image,    // 3. MUST send the image back to the frontend
+          fileUrl: msg.fileUrl,
+          fileName: msg.fileName,
           createdAt: msg.createdAt,
           status: msg.status,
           chatId,
@@ -311,6 +315,22 @@ const initializeSocket = (server) => {
     socket.on("stopTyping", ({ roomId }) => {
       socket.to(roomId).emit("userStopTyping");
     });
+
+    socket.on("sendConnectionRequest", ({ senderId, receiverId, firstName, lastName, profilePic }) => {
+        // Look up if the receiver is currently online
+      const receiverSocketId = userSocketMap.get(receiverId.toString());
+      
+      if (receiverSocketId) {
+        // If they are online, instantly send them the notification!
+        io.to(receiverSocketId).emit("connectionRequestReceived", {
+          senderId,
+          firstName,
+          lastName,
+          text: "Sent you a connection request!"
+        });
+      }
+    })
+
 
     /**
      * DISCONNECT

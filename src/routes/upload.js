@@ -20,23 +20,23 @@ const upload = multer({
 });
 
 // 3. The Upload Route (Protected by userAuth)
-uploadRouter.post("/uploadImage", userAuth, upload.single("image"), async (req, res) => {
+uploadRouter.post("/uploadFile", userAuth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No image provided" });
     }
 
-    // 4. Stream the buffer securely to Cloudinary
+    // 4. Stream the buffer securely to Cloudinary (// 👇 NEW: resource_type "auto" allows PDFs, ZIPs, DOCs, etc.)
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: "devnet_chat" }, // Organizes images into a specific folder in your dashboard
+      { folder: "devnet_chat" , resource_type: "auto" },  // "auto" detects the file type and handles it accordingly
       (error, result) => {
         if (error) {
           console.error("Cloudinary upload failed:", error);
           return res.status(500).json({ message: "Cloudinary upload failed" });
         }
         
-        // 5. Return the secure URL back to React
-        res.status(200).json({ imageUrl: result.secure_url });
+        // 5. Return the secure URL back to React and original file name
+        res.status(200).json({ fileUrl: result.secure_url, fileName: req.file.originalname, resourceType: result.resource_type});  // Cloudinary tells us if it's an image/video or a "raw" file (PDF, Zip)
       }
     );
 
