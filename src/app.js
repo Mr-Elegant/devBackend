@@ -21,6 +21,7 @@ import userRouter from './routes/user.js';
 import paymentRouter from "./routes/payment.js";
 import chatRouter from "./routes/chat.js";
 import uploadRouter from "./routes/upload.js";
+import postRouter from "./routes/post.js";
 
 app.use(express.json())
 app.use(cookieParser())
@@ -39,6 +40,7 @@ app.use("/", userRouter);
 app.use("/", paymentRouter); 
 app.use("/", chatRouter);
 app.use("/", uploadRouter);
+app.use("/", postRouter);
 
 connectDB()
     .then(() => {

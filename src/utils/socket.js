@@ -331,6 +331,38 @@ const initializeSocket = (server) => {
       }
     })
 
+// ==========================================
+    // DELETE MESSAGE LOGIC
+    // ==========================================
+    socket.on("deleteMessage", async ({ chatId, messageId, roomId, userId }) => {
+      // 1. Basic validation to ensure we have all required data
+      if (!chatId || !messageId || !roomId || !userId) return;
+
+      try {
+        // 2. Secure Database Deletion
+        // We use MongoDB's $pull operator to remove the specific message from the array.
+        // SECURITY CHECK: We explicitly include "senderId: userId" in the query.
+        // This guarantees a user can ONLY delete their own messages, preventing hacks!
+        const result = await Chat.updateOne(
+          { _id: chatId },
+          { 
+            $pull: { 
+              messages: { _id: messageId, senderId: userId } 
+            } 
+          }
+        );
+
+        // 3. If the database successfully removed it (modifiedCount > 0)
+        if (result.modifiedCount) {
+          // Tell everyone in this specific chat room (including the sender) 
+          // to instantly remove this message from their UI.
+          io.to(roomId).emit("messageDeleted", { messageId });
+          console.log(`Message ${messageId} securely deleted by user ${userId}`);
+        }
+      } catch (error) {
+        console.error("Error deleting message:", error);
+      }
+    });
 
     /**
      * DISCONNECT

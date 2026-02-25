@@ -73,6 +73,42 @@ const userSchema = new Schema(
     skills: {
       type: [String],
     },
+    // ==========================================
+    // DEVELOPER PORTFOLIO SECTION
+    // ==========================================
+    projects: [
+      {
+         // The name of the project (e.g "Devnet chat engine")
+         title :{
+          type: String,
+          required: true,
+          trim: true,
+          maxLength: 100, // concise for ui layout
+         },
+         // A short description about the project (e.g "A real time chat engine built using socket.io and nodejs")
+         description : {
+          type: String,
+          trim: true,
+          maxLength: 500,  // concise for ui layout
+         },
+         // The URL OF LIVE DEPLOYED project
+         liveUrl: {
+          type: String,
+          trim: true,
+         },
+          // The URL of the github repository of the project 
+         githubUrl: {
+          type: String,
+          trim: true,
+         },
+         // Array to store Cloudinary screenshot URLs of the project
+         images: [
+          {
+            type: String
+          },
+         ]
+      }
+    ]
   },
   {
     timestamps: true,
