@@ -184,7 +184,8 @@ postRouter.get("/post/:postId", userAuth, async (req, res) => {
     // Find the post and populate both the author AND the users who commented
     const post = await Post.findById(postId)
       .populate("author", "firstName lastName photoUrl headline")
-      .populate("comments.user", "firstName lastName photoUrl");
+      .populate("comments.user", "firstName lastName photoUrl")
+      .populate("comments.replies.user", "firstName lastName photoUrl"); // Also populate the repliers!
 
     if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -194,5 +195,44 @@ postRouter.get("/post/:postId", userAuth, async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+
+// ==========================================
+// ADD A REPLY TO A COMMENT
+// ==========================================
+postRouter.post("/post/comment/reply/:postId/:commentId", userAuth, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const { text } = req.body;
+    const userId = req.user._id;
+
+    if (!text.trim()) return res.status(400).json({ message: "Reply cannot be empty" });
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    // Push the new reply
+    comment.replies.push({ user: userId, text });
+    await post.save();
+
+    // Re-fetch and fully populate so the frontend gets the names and photos of the repliers!
+    const updatedPost = await Post.findById(postId)
+      .populate("comments.user", "firstName lastName photoUrl")
+      .populate("comments.replies.user", "firstName lastName photoUrl");
+
+    // Send back the specific comment that was updated
+    const updatedComment = updatedPost.comments.id(commentId);
+    res.json({ message: "Reply added!", comment: updatedComment });
+  } catch (error) {
+    console.error("Error adding reply:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+
 
 export default postRouter;

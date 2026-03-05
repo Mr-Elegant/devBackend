@@ -3,6 +3,24 @@
 // ==========================================
 import mongoose from "mongoose";
 
+const replySchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    text: {
+      type: String,
+      required: true,
+      maxLength: 1000,
+    },
+  },
+  { timestamps: true }
+);
+
+
+
 // We create a separate schema for comments so they are cleanly nested inside posts
 const commentSchema = new mongoose.Schema(
   {
@@ -23,6 +41,7 @@ const commentSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    replies: [replySchema], // Nested replies to comments
   },
   { timestamps: true }
 );

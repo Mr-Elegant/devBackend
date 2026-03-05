@@ -364,6 +364,43 @@ const initializeSocket = (server) => {
       }
     });
 
+
+    // ==========================================
+    // COMMUNITY POST REAL-TIME SYNC
+    // ==========================================
+
+    // 1. User opens a post
+    socket.on("joinPost", ({ postId }) => {
+      socket.join(`post_${postId}`);
+      console.log(`User joined post room: post_${postId}`);
+    });
+
+    // 2. User leaves the post (goes back to feed)
+    socket.on("leavePost", ({ postId }) => {
+      socket.leave(`post_${postId}`);
+      console.log(`User left post room: post_${postId}`);
+    });
+    // 3. User submits a new comment
+    socket.on("newComment", ({ postId, comment }) => {
+      // Broadcast the new comment to everyone ELSE in this specific post room
+      socket.to(`post_${postId}`).emit("commentReceived", comment);
+    });
+
+    // User submits a new reply to a comment
+    socket.on("newReply", ({ postId, commentId, reply }) => {
+      // Broadcast the reply to everyone else looking at this post
+      socket.to(`post_${postId}`).emit("replyReceived", { commentId, reply });
+    });
+
+    // 4. Post Author marks an answer as accepted
+    socket.on("acceptAnswer", ({ postId, commentId, isAccepted }) => {
+      // Broadcast the green checkmark update to everyone viewing the post
+      socket.to(`post_${postId}`).emit("answerAcceptedUpdate", { commentId, isAccepted });
+    });
+
+
+
+
     /**
      * DISCONNECT
      */
