@@ -173,4 +173,26 @@ postRouter.patch("/post/comment/accept/:postId/:commentId", userAuth, async (req
   }
 });
 
+
+// ==========================================
+// GET A SINGLE POST BY ID
+// ==========================================
+postRouter.get("/post/:postId", userAuth, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    
+    // Find the post and populate both the author AND the users who commented
+    const post = await Post.findById(postId)
+      .populate("author", "firstName lastName photoUrl headline")
+      .populate("comments.user", "firstName lastName photoUrl");
+
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    res.json({ data: post });
+  } catch (error) {
+    console.error("Error fetching single post:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 export default postRouter;
