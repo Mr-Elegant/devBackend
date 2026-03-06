@@ -49,24 +49,39 @@ postRouter.post("/post/create", userAuth, async (req, res) => {
 // ==========================================
 // 3. GET GLOBAL FEED (With Pagination)
 // ==========================================
+// ==========================================
+// 3. GET GLOBAL FEED (With Pagination & Search)
+// ==========================================
 postRouter.get("/post/feed", userAuth, async (req, res) => {
   try {
-    // 1. Pagination setup: Get 'page' from the URL query (default to 1), and limit to 10 posts per load
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit; // Math to figure out how many posts to skip (e.g., page 2 skips the first 10)
+    const skip = (page - 1) * limit; 
+    
+    // Grab the search query from the URL
+    const searchQuery = req.query.q || "";
+    
+    //  Build a dynamic filter object
+    let queryFilter = {};
 
-    // 2. Fetch the posts from the database
-    const posts = await Post.find()
-      .sort({ createdAt: -1 }) // Sort by newest first (-1)
-      .skip(skip) // Skip the ones we've already seen
-      .limit(limit) // Only grab 10
-      // 🔥 POPULATE: Swap the 'author' Object ID with their actual name and photo for the UI!
+    if (searchQuery.trim()) {
+      queryFilter = {
+        $or: [
+          { title: { $regex: searchQuery, $options: "i" } },   // Search titles (case-insensitive)
+          { content: { $regex: searchQuery, $options: "i" } }, // Search body content
+          { tags: { $regex: searchQuery, $options: "i" } }     // Search tags array
+        ]
+      };
+    }
+
+    // Pass the queryFilter into the .find() method
+    const posts = await Post.find(queryFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate("author", "firstName lastName photoUrl headline")
-      // Also populate the users who left comments
       .populate("comments.user", "firstName lastName photoUrl");
 
-    // 3. Return the array of beautiful, populated posts
     res.json({ data: posts });
   } catch (error) {
     console.error("Error fetching feed:", error);
