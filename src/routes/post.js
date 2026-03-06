@@ -248,6 +248,71 @@ postRouter.post("/post/comment/reply/:postId/:commentId", userAuth, async (req, 
 });
 
 
+// ==========================================
+// DELETE A POST
+// ==========================================
+postRouter.delete("/post/:postId", userAuth, async (req, res) => {
+  try {
+    const {postId} = req.params;
+    const loggedInUser = req.user._id.toString();
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // 🔒 SECURITY: Ensure the person deleting the post is the actual author!
+    if (post.author.toString() !== loggedInUserId) {
+      return res.status(403).json({ message: "You are not authorized to delete this post." });
+    }
+
+    await Post.findByIdAndDelete(postId);
+    res.json({ message: "Post deleted successfully" });
+
+  } catch (error) {
+      console.error("Error deleting post:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+  }
+})
+
+
+// ==========================================
+// EDIT A POST
+// ==========================================
+postRouter.patch("/post/:postId", userAuth, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const loggedInUserId = req.user._id.toString();
+    const { title, content, codeSnippet, codeLanguage, tags } = req.body;
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // 🔒 SECURITY: Ensure the person editing the post is the actual author!
+    if (post.author.toString() !== loggedInUserId) {
+      return res.status(403).json({ message: "You are not authorized to edit this post." });
+    }
+
+    // Update the fields if new data was provided
+    post.title = title || post.title;
+    post.content = content || post.content;
+    post.codeSnippet = codeSnippet !== undefined ? codeSnippet : post.codeSnippet;
+    post.codeLanguage = codeLanguage || post.codeLanguage;
+    post.tags = tags || post.tags;
+
+    const updatedPost = await post.save();
+    
+    // Repopulate author data before sending back to frontend
+    await updatedPost.populate("author", "firstName lastName photoUrl headline");
+
+    res.json({ message: "Post updated successfully", data: updatedPost });
+  } catch (error) {
+    console.error("Error editing post:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+
+
 
 
 export default postRouter;
