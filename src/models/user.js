@@ -20,11 +20,11 @@ const userSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-      validate(value){
-        if(!validator.isEmail(value)){
+      validate(value) {
+        if (!validator.isEmail(value)) {
           throw new Error("Invalid email address : " + value);
         }
-      }
+      },
     },
     password: {
       type: String,
@@ -78,64 +78,69 @@ const userSchema = new Schema(
     // ==========================================
     projects: [
       {
-         // The name of the project (e.g "Devnet chat engine")
-         title :{
+        // The name of the project (e.g "Devnet chat engine")
+        title: {
           type: String,
           required: true,
           trim: true,
           maxLength: 100, // concise for ui layout
-         },
-         // A short description about the project (e.g "A real time chat engine built using socket.io and nodejs")
-         description : {
+        },
+        // A short description about the project (e.g "A real time chat engine built using socket.io and nodejs")
+        description: {
           type: String,
           trim: true,
-          maxLength: 500,  // concise for ui layout
-         },
-         // The URL OF LIVE DEPLOYED project
-         liveUrl: {
+          maxLength: 500, // concise for ui layout
+        },
+        // The URL OF LIVE DEPLOYED project
+        liveUrl: {
           type: String,
           trim: true,
-         },
-          // The URL of the github repository of the project 
-         githubUrl: {
+        },
+        // The URL of the github repository of the project
+        githubUrl: {
           type: String,
           trim: true,
-         },
-         // Array to store Cloudinary screenshot URLs of the project
-         images: [
+        },
+        // Array to store Cloudinary screenshot URLs of the project
+        images: [
           {
-            type: String
+            type: String,
           },
-         ]
-      }
-    ]
+        ],
+      },
+    ],
+
+    // ✨ NEW: Store the GitHub username
+    githubUsername: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
-
 
 // dont use arrow function in userSchema function otherwise it will break bcz of (this)
 userSchema.methods.getJWT = async function () {
   const user = this;
 
-  const token = jwt.sign({_id: user._id}, process.env.JWT_SECRET);
+  const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET);
 
   return token;
-}
+};
 
 userSchema.methods.validatePassword = async function (passwordInputByUser) {
   const user = this;
   const passwordHash = user.password;
 
-  const isPasswordValid = await bcrypt.compare(passwordInputByUser,passwordHash)
+  const isPasswordValid = await bcrypt.compare(
+    passwordInputByUser,
+    passwordHash,
+  );
 
   return isPasswordValid;
-}
-
-
-
-
+};
 
 export const User = mongoose.model("User", userSchema);

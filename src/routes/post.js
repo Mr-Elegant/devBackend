@@ -79,8 +79,8 @@ postRouter.get("/post/feed", userAuth, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("author", "firstName lastName photoUrl headline")
-      .populate("comments.user", "firstName lastName photoUrl");
+      .populate("author", "firstName lastName photoUrl headline isPremium membershipType") // Populate author details
+      .populate("comments.user", "firstName lastName photoUrl isPremium membershipType"); // Also populate the users who commented
 
     res.json({ data: posts });
   } catch (error) {
@@ -198,9 +198,9 @@ postRouter.get("/post/:postId", userAuth, async (req, res) => {
     
     // Find the post and populate both the author AND the users who commented
     const post = await Post.findById(postId)
-      .populate("author", "firstName lastName photoUrl headline")
-      .populate("comments.user", "firstName lastName photoUrl")
-      .populate("comments.replies.user", "firstName lastName photoUrl"); // Also populate the repliers!
+      .populate("author", "firstName lastName photoUrl headline isPremium membershipType") // Populate author details
+      .populate("comments.user", "firstName lastName photoUrl isPremium membershipType")
+      .populate("comments.replies.user", "firstName lastName photoUrl membershipType"); // Also populate the repliers!
 
     if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -309,6 +309,8 @@ postRouter.patch("/post/:postId", userAuth, async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+
 
 
 

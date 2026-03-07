@@ -6,9 +6,6 @@ import ConnectionRequest from "../models/connectionRequest.js";
 import { User } from "../models/user.js";
 import { run } from "../utils/sendEmail.js";
 
-// ==========================================
-// 1. SEND CONNECTION REQUEST (Untouched)
-// ==========================================
 requestRouter.post("/request/send/:status/:toUserId", userAuth, async (req, res) => {
   try {
     const fromUserId = req.user._id;
@@ -58,9 +55,6 @@ requestRouter.post("/request/send/:status/:toUserId", userAuth, async (req, res)
   }
 });
 
-// ==========================================
-// 2. REVIEW CONNECTION REQUEST (Updated!)
-// ==========================================
 requestRouter.post("/request/review/:status/:requestId", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
@@ -71,7 +65,6 @@ requestRouter.post("/request/review/:status/:requestId", userAuth, async (req, r
       return res.status(400).json({ message: "Status not allowed!" });
     }
 
-    // ✨ THE FIX: We now allow reviewing requests that are EITHER "interested" OR "rejected"!
     const connectionRequest = await ConnectionRequest.findOne({
       _id: requestId,
       toUserId: loggedInUser._id,
@@ -91,15 +84,14 @@ requestRouter.post("/request/review/:status/:requestId", userAuth, async (req, r
   }
 });
 
-// ==========================================
-// 3. GET REJECTED REQUESTS (New!)
-// ==========================================
 requestRouter.get("/user/requests/rejected", userAuth, async (req, res) => {
   try {
     const rejectedRequests = await ConnectionRequest.find({
       toUserId: req.user._id,
       status: "rejected",
-    }).populate("fromUserId", "firstName lastName photoUrl age gender about");
+    })
+    // ✨ ADDED isPremium HERE
+    .populate("fromUserId", "firstName lastName photoUrl age gender about isPremium membershipType");
 
     res.json({ data: rejectedRequests });
   } catch (error) {

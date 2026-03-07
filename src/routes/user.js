@@ -4,7 +4,9 @@ import userAuth from "../middleware/auth.js";
 import ConnectionRequest from "../models/connectionRequest.js";
 import { User } from "../models/user.js";
 const userRouter = express.Router();
-const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills";
+
+// ✨ ADDED isPremium to the safe data string
+const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills isPremium membershipType";
 
 // get all pending connection request for the loggedIn user
 userRouter.get("/user/requests/received", userAuth, async (req, res) => {
@@ -15,8 +17,6 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
       toUserId: loggedInUser._id,
       status: "interested",
     }).populate("fromUserId", USER_SAFE_DATA);
-    // populate("fromUserId", "firstName lastName")
-    // populate("fromUserId", ["firstName","lastName"])
 
     res.json({
       message: "Data Fetched Successfully",
@@ -27,35 +27,24 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
   }
 });
 
-// retrieves all accepted connection requests for the logged-in user, returning the list of connected users.
+// retrieves all accepted connection requests for the logged-in user
 userRouter.get("/user/connections", userAuth, async (req, res) => {
   try {
-    // Get the currently logged-in user from the request object (set by userAuth)
     const loggedInUser = req.user;
 
-    // Find all accepted connection requests where the logged-in user is either the sender or receiver
     const connectionRequests = await ConnectionRequest.find({
       $or: [
-        // Case 1: The user received the request and it was accepted
         { toUserId: loggedInUser._id, status: "accepted" },
-        // Case 2: The user sent the request and it was accepted
         { fromUserId: loggedInUser._id, status: "accepted" },
       ],
     })
-      // Populate sender user info (safe fields only)
       .populate("fromUserId", USER_SAFE_DATA)
-      // Populate receiver user info (safe fields only)
       .populate("toUserId", USER_SAFE_DATA);
 
-    // console.log(connectionRequests);
-
-    // Transform the connectionRequests into a list of "other users" (the ones connected to logged-in user)
     const data = connectionRequests.map((row) => {
-      // If the logged-in user is the sender, return the receiver's user data
       if (row.fromUserId._id.toString() === loggedInUser._id.toString()) {
         return row.toUserId;
       }
-      // Otherwise, return the sender's user data
       return row.fromUserId;
     });
 
@@ -100,22 +89,16 @@ userRouter.get("/feed", userAuth, async (req, res) => {
   }
 });
 
-// ==========================================
 // SEARCH USERS (EXCLUDING ALREADY INTERACTED)
-// ==========================================
 userRouter.get("/user/search", userAuth, async (req, res) => {
   try {
-    // Grab the search text from the URL (e.g., /user/search?q=preet)
     const searchQuery = req.query.q || "";
     const loggedInUserId = req.user._id;
 
-    // If the search is empty, return an empty array to save server load
     if (!searchQuery.trim()) {
       return res.json({ data: [] });
     }
 
-    // 1. Find EVERY connection request involving the logged-in user 
-    // (This includes pending, accepted, and rejected requests, sent OR received)
     const existingInteractions = await ConnectionRequest.find({
       $or: [
         { fromUserId: loggedInUserId },
@@ -123,23 +106,17 @@ userRouter.get("/user/search", userAuth, async (req, res) => {
       ]
     }).select("fromUserId toUserId");
 
-    // 2. Extract those IDs into a single "Hidden List" array
     const hideUsersFromSearch = new Set();
     existingInteractions.forEach((interaction) => {
       hideUsersFromSearch.add(interaction.fromUserId.toString());
       hideUsersFromSearch.add(interaction.toUserId.toString());
     });
-    // Convert the Set back to an array for Mongoose
     const hiddenUsersArray = Array.from(hideUsersFromSearch);
 
-
-
-
-    // 3. Perform the search, but EXCLUDE everyone in the Hidden List
     const users = await User.find({
       $and: [
-        { _id: { $ne: loggedInUserId } }, // Always hide yourself
-        { _id: { $nin: hiddenUsersArray } }, // 🔥 THE FIX: Hide anyone you've already interacted with
+        { _id: { $ne: loggedInUserId } }, 
+        { _id: { $nin: hiddenUsersArray } }, 
         {
           $or: [
             { firstName: { $regex: searchQuery, $options: "i" } },
@@ -149,7 +126,8 @@ userRouter.get("/user/search", userAuth, async (req, res) => {
         },
       ],
     })
-    .select("firstName lastName photoUrl headline")
+    // ✨ ADDED isPremium HERE
+    .select("firstName lastName photoUrl headline isPremium membershipType")
     .limit(20);
 
     res.json({ data: users });
