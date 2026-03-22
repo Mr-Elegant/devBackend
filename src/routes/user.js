@@ -1,18 +1,18 @@
-import ConnectionRequestModel from "../models/connectionRequest.js";
 import express from "express";
 import userAuth from "../middleware/auth.js";
 import ConnectionRequest from "../models/connectionRequest.js";
 import { User } from "../models/user.js";
+
 const userRouter = express.Router();
 
-// ✨ ADDED isPremium to the safe data string
 const USER_SAFE_DATA = "firstName lastName photoUrl age gender about skills isPremium membershipType";
 
-// get all pending connection request for the loggedIn user
+// ==========================================
+// 1. GET RECEIVED REQUESTS
+// ==========================================
 userRouter.get("/user/requests/received", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
-
     const connectionRequests = await ConnectionRequest.find({
       toUserId: loggedInUser._id,
       status: "interested",
@@ -23,15 +23,16 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
       data: connectionRequests,
     });
   } catch (error) {
-    req.status(400).send("Error : " + error.message);
+    res.status(400).send("Error : " + error.message);
   }
 });
 
-// retrieves all accepted connection requests for the logged-in user
+// ==========================================
+// 2. GET ACCEPTED CONNECTIONS
+// ==========================================
 userRouter.get("/user/connections", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
-
     const connectionRequests = await ConnectionRequest.find({
       $or: [
         { toUserId: loggedInUser._id, status: "accepted" },
@@ -54,15 +55,18 @@ userRouter.get("/user/connections", userAuth, async (req, res) => {
   }
 });
 
+// ==========================================
+// 3. ✨ THE MISSING ROUTE: HOMEPAGE FEED
+// ==========================================
 userRouter.get("/feed", userAuth, async (req, res) => {
   try {
     const loggedInUser = req.user;
-
     const page = parseInt(req.query.page) || 1;
     let limit = parseInt(req.query.limit) || 10;
     limit = limit > 50 ? 50 : limit;
     const skip = (page - 1) * limit;
 
+    // Find all users we've already interacted with
     const connectionRequests = await ConnectionRequest.find({
       $or: [{ fromUserId: loggedInUser._id }, { toUserId: loggedInUser._id }],
     }).select("fromUserId toUserId");
@@ -73,6 +77,7 @@ userRouter.get("/feed", userAuth, async (req, res) => {
       hideUsersFromFeed.add(req.toUserId.toString());
     });
 
+    // Fetch users we haven't seen yet
     const users = await User.find({
       $and: [
         { _id: { $nin: Array.from(hideUsersFromFeed) } },
@@ -89,7 +94,9 @@ userRouter.get("/feed", userAuth, async (req, res) => {
   }
 });
 
-// SEARCH USERS (EXCLUDING ALREADY INTERACTED)
+// ==========================================
+// 4. SEARCH USERS (With Connection Status)
+// ==========================================
 userRouter.get("/user/search", userAuth, async (req, res) => {
   try {
     const searchQuery = req.query.q || "";
@@ -99,20 +106,34 @@ userRouter.get("/user/search", userAuth, async (req, res) => {
       return res.json({ data: [] });
     }
 
+    // Fetch all interactions involving the logged-in user
     const existingInteractions = await ConnectionRequest.find({
       $or: [
         { fromUserId: loggedInUserId },
         { toUserId: loggedInUserId }
       ]
-    }).select("fromUserId toUserId");
-
-    const hideUsersFromSearch = new Set();
-    existingInteractions.forEach((interaction) => {
-      hideUsersFromSearch.add(interaction.fromUserId.toString());
-      hideUsersFromSearch.add(interaction.toUserId.toString());
     });
+
+    // Map connection status and filter out strictly "hidden" users
+    const interactionMap = new Map();
+    const hideUsersFromSearch = new Set();
+
+    existingInteractions.forEach((interaction) => {
+      const otherUserId = interaction.fromUserId.equals(loggedInUserId)
+        ? interaction.toUserId.toString()
+        : interaction.fromUserId.toString();
+      
+      interactionMap.set(otherUserId, interaction.status);
+
+      // Hide users explicitly ignored/rejected
+      if (interaction.status === "ignored" || interaction.status === "rejected") {
+        hideUsersFromSearch.add(otherUserId);
+      }
+    });
+
     const hiddenUsersArray = Array.from(hideUsersFromSearch);
 
+    // Find matching users
     const users = await User.find({
       $and: [
         { _id: { $ne: loggedInUserId } }, 
@@ -125,15 +146,18 @@ userRouter.get("/user/search", userAuth, async (req, res) => {
           ],
         },
       ],
-    })
-    // ✨ ADDED isPremium HERE
-    .select("firstName lastName photoUrl headline isPremium membershipType")
-    .limit(20);
+    }).select(USER_SAFE_DATA);
 
-    res.json({ data: users });
+    // Attach connection status
+    const usersWithStatus = users.map(user => {
+      const userObj = user.toObject(); 
+      userObj.connectionStatus = interactionMap.get(user._id.toString()) || "none";
+      return userObj;
+    });
+
+    res.json({ data: usersWithStatus });
   } catch (error) {
-    console.error("Search error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(400).json({ message: error.message });
   }
 });
 
