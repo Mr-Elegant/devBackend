@@ -161,4 +161,49 @@ userRouter.get("/user/search", userAuth, async (req, res) => {
   }
 });
 
+
+// ==========================================
+// 5. GET SPECIFIC USER PROFILE (Public View)
+// ==========================================
+userRouter.get("/user/:userId", userAuth, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const loggedInUserId = req.user._id;
+
+    // 1. Fetch the user (including their portfolio projects and github)
+    const user = await User.findById(targetUserId)
+      .select("firstName lastName photoUrl age gender about skills isPremium membershipType projects githubUsername");
+
+    if (!user) {
+      return res.status(404).json({ message: "Developer not found" });
+    }
+
+    // 2. Check if there is an existing connection between the logged-in user and this profile
+    const existingConnection = await ConnectionRequest.findOne({
+      $or: [
+        { fromUserId: loggedInUserId, toUserId: targetUserId },
+        { fromUserId: targetUserId, toUserId: loggedInUserId }
+      ]
+    });
+
+    const userObj = user.toObject();
+    
+    // Determine the status so the frontend knows what button to show
+    if (loggedInUserId.toString() === targetUserId.toString()) {
+      userObj.connectionStatus = "self";
+    } else if (existingConnection) {
+      userObj.connectionStatus = existingConnection.status;
+    } else {
+      userObj.connectionStatus = "none";
+    }
+
+    res.json({ data: userObj });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+
+
 export default userRouter;
