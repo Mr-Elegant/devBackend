@@ -1,6 +1,8 @@
 import { Server } from "socket.io";
 import { Chat } from "../models/chat.js";
 import crypto from "crypto";
+import { createClient } from "redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 
 // Global map to track who is currently connected
 const userSocketMap = new Map();
@@ -8,9 +10,22 @@ const userSocketMap = new Map();
 const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: process.env.FRONTEND_URL || "http://localhost:5173",
       credentials: true,
     },
+  });
+
+  // ==========================================
+  // REDIS ADAPTER SETUP (For Production Scaling)
+  // ==========================================
+  const pubClient = createClient({ url: process.env.REDIS_URL || "redis://localhost:6379" });
+  const subClient = pubClient.duplicate();
+
+  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log("Redis Adapter connected to Socket.IO successfully!");
+  }).catch((err) => {
+    console.error("Redis connection failed. Falling back to in-memory adapter:", err.message);
   });
 
   io.on("connection", (socket) => {
@@ -397,6 +412,47 @@ const initializeSocket = (server) => {
       // Broadcast the green checkmark update to everyone viewing the post
       socket.to(`post_${postId}`).emit("answerAcceptedUpdate", { commentId, isAccepted });
     });
+
+    // ==========================================
+    // WHITEBOARD REAL-TIME SYNC
+    // ==========================================
+    socket.on("joinWhiteboard", ({ roomId }) => {
+      socket.join(`whiteboard_${roomId}`);
+      console.log(`Socket ${socket.id} joined whiteboard: ${roomId}`);
+    });
+
+    socket.on("leaveWhiteboard", ({ roomId }) => {
+      socket.leave(`whiteboard_${roomId}`);
+      console.log(`Socket ${socket.id} left whiteboard: ${roomId}`);
+    });
+
+    socket.on("whiteboardUpdate", ({ roomId, update }) => {
+      // Broadcast the drawing changes to everyone ELSE in this specific whiteboard room
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardUpdateReceived", update);
+    });
+
+    // ✨ NEW: Whiteboard Invitation Logic
+    socket.on("whiteboard-invite", ({ targetUserId, roomId, senderInfo }) => {
+      const receiverSocketId = userSocketMap.get(targetUserId);
+      if (receiverSocketId) {
+        // Send an invitation to the target user if they are online
+        io.to(receiverSocketId).emit("whiteboard-invite-received", {
+          roomId,
+          senderInfo,
+        });
+      }
+    });
+
+    socket.on("whiteboard-invite-rejected", ({ senderId, rejecterInfo }) => {
+      const senderSocketId = userSocketMap.get(senderId);
+      if (senderSocketId) {
+        // Notify the original sender that their invitation was rejected
+        io.to(senderSocketId).emit("whiteboard-invite-was-rejected", { rejecterInfo });
+      }
+    });
+
+
+
 
 
 
