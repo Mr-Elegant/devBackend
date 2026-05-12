@@ -8,10 +8,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.NODE_ENV === "production" 
-        ? "https://devnet.co.in/auth/google/callback" 
-        : "/auth/google/callback",
-      proxy: true,
+      callbackURL: `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/google/callback`,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -51,10 +48,7 @@ passport.use(
     {
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: process.env.NODE_ENV === "production" 
-        ? "https://devnet.co.in/auth/github/callback" 
-        : "/auth/github/callback",
-      proxy: true,
+      callbackURL: `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/github/callback`,
       scope: ["user:email"], // Request access to user's email
     },
     async (accessToken, refreshToken, profile, done) => {
