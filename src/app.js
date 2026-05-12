@@ -25,6 +25,9 @@ import uploadRouter from "./routes/upload.js";
 import postRouter from "./routes/post.js";
 import adminRouter from "./routes/admin.js";
 
+// Trust the Nginx reverse proxy so Passport generates HTTPS callback URLs
+app.set("trust proxy", 1);
+
 app.use(express.json())
 app.use(cookieParser())
 app.use(cors({
