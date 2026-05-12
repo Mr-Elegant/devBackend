@@ -254,7 +254,7 @@ postRouter.post("/post/comment/reply/:postId/:commentId", userAuth, async (req, 
 postRouter.delete("/post/:postId", userAuth, async (req, res) => {
   try {
     const {postId} = req.params;
-    const loggedInUser = req.user._id.toString();
+    const loggedInUserId = req.user._id.toString();
 
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post not found" });

@@ -11,7 +11,8 @@ import express from 'express';
 const app = express();
 import cookieParser from 'cookie-parser';
 import cors from "cors"
-import cron from 'node-cron'
+import passport from "passport";
+import "./config/passport.js"; // Initialize Passport strategies
 import initializeSocket from "./utils/socket.js";
 
 import authRouter from './routes/auth.js';
@@ -22,13 +23,16 @@ import paymentRouter from "./routes/payment.js";
 import chatRouter from "./routes/chat.js";
 import uploadRouter from "./routes/upload.js";
 import postRouter from "./routes/post.js";
+import adminRouter from "./routes/admin.js";
 
 app.use(express.json())
 app.use(cookieParser())
 app.use(cors({
-     origin: "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     credentials: true,
 }))
+app.use(passport.initialize());
+
 const server = http.createServer(app);
 initializeSocket(server);
 
@@ -41,15 +45,15 @@ app.use("/", paymentRouter);
 app.use("/", chatRouter);
 app.use("/", uploadRouter);
 app.use("/", postRouter);
+app.use("/", adminRouter);
 
+const PORT = process.env.PORT || 3000;
 connectDB()
     .then(() => {
-        server.listen(3000, () => {
-            console.log('Server is running on port 3000');
+        server.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
         })
     })
     .catch((err) => {
         console.log("Database connection failed", err);
     });
-
-

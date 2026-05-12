@@ -28,11 +28,16 @@ const userSchema = new Schema(
     },
     password: {
       type: String,
-      required: true,
-      // validate(value) {
-      //   if (!validator.isStrongPassword(value)) {
-      //     throw new Error("Enter a Strong Password: " + value);
-      // }
+      required: function () {
+        // Only require a password if they don't have a googleId or githubId
+        return !this.googleId && !this.githubId;
+      },
+    },
+    googleId: {
+      type: String,
+    },
+    githubId: {
+      type: String,
     },
     age: {
       type: Number,
@@ -115,6 +120,12 @@ const userSchema = new Schema(
       type: String,
       trim: true,
       default: "",
+    },
+
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user", // 🟢 FIXED: It is now safely inside the role configuration
     },
   },
   {
