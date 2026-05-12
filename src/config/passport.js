@@ -8,7 +8,8 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.FRONTEND_URL}/auth/google/callback`,
+      callbackURL: "/auth/google/callback",
+      proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -48,7 +49,8 @@ passport.use(
     {
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: `${process.env.FRONTEND_URL}/auth/github/callback`,
+      callbackURL: "/auth/github/callback",
+      proxy: true,
       scope: ["user:email"], // Request access to user's email
     },
     async (accessToken, refreshToken, profile, done) => {
