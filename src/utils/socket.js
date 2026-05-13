@@ -18,15 +18,15 @@ const initializeSocket = (server) => {
   // ==========================================
   // REDIS ADAPTER SETUP (For Production Scaling)
   // ==========================================
-  const pubClient = createClient({ url: process.env.REDIS_URL || "redis://localhost:6379" });
-  const subClient = pubClient.duplicate();
+  // const pubClient = createClient({ url: process.env.REDIS_URL || "redis://localhost:6379" });
+  // const subClient = pubClient.duplicate();
 
-  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-    io.adapter(createAdapter(pubClient, subClient));
-    console.log("Redis Adapter connected to Socket.IO successfully!");
-  }).catch((err) => {
-    console.error("Redis connection failed. Falling back to in-memory adapter:", err.message);
-  });
+  // Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+  //   io.adapter(createAdapter(pubClient, subClient));
+  //   console.log("Redis Adapter connected to Socket.IO successfully!");
+  // }).catch((err) => {
+  //   console.error("Redis connection failed. Falling back to in-memory adapter:", err.message);
+  // });
 
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.id}`);
