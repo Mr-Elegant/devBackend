@@ -24,6 +24,8 @@ import chatRouter from "./routes/chat.js";
 import uploadRouter from "./routes/upload.js";
 import postRouter from "./routes/post.js";
 import adminRouter from "./routes/admin.js";
+import "./utils/cronjob.js";
+import startKeepAlive from "./utils/keepAlive.js";
 
 // Trust the proxy (Render / Nginx) so Passport generates HTTPS callback URLs
 app.set("trust proxy", 1);
@@ -80,7 +82,8 @@ connectDB()
     .then(() => {
         server.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);
-        })
+            startKeepAlive();
+        });
     })
     .catch((err) => {
         console.log("Database connection failed", err);
