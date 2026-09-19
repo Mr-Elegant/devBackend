@@ -25,16 +25,41 @@ import uploadRouter from "./routes/upload.js";
 import postRouter from "./routes/post.js";
 import adminRouter from "./routes/admin.js";
 
-// Trust the Nginx reverse proxy so Passport generates HTTPS callback URLs
+// Trust the proxy (Render / Nginx) so Passport generates HTTPS callback URLs
 app.set("trust proxy", 1);
 
-app.use(express.json())
-app.use(cookieParser())
+app.use(express.json());
+app.use(cookieParser());
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGIN,
+    "http://localhost:5173",
+    "https://devnet.co.in",
+    "https://www.devnet.co.in",
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+            allowedOrigins.includes(origin) ||
+            origin.endsWith(".vercel.app") ||
+            origin.endsWith(".devnet.co.in") ||
+            process.env.NODE_ENV !== "production"
+        ) {
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
     credentials: true,
-}))
+}));
 app.use(passport.initialize());
+
+// Health check endpoint for uptime monitors (Cron-job.org/UptimeRobot) & Render
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 const server = http.createServer(app);
 initializeSocket(server);
