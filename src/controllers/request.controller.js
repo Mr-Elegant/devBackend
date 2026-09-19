@@ -36,11 +36,14 @@ export const sendRequest = async (req, res) => {
 
     const data = await connectionRequest.save();
 
-    const emailRes = await run(
-      "A new friend request from " + req.user.firstName,
-      req.user.firstName + " is " + status + " in " + toUser.firstName
-    );
-    console.log(emailRes);
+    // Dispatch email notification non-blockingly so API response is never delayed or failed
+    if (toUser.emailId) {
+      run(
+        toUser.emailId,
+        `New friend request from ${req.user.firstName}`,
+        `${req.user.firstName} is ${status} in connecting with you on DevNet!`
+      ).catch((err) => console.warn("[Email Notification] Non-blocking warning:", err.message));
+    }
 
     res.json({
       message: req.user.firstName + " is " + status + " in " + toUser.firstName,

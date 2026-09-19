@@ -31,23 +31,27 @@ const createSendEmailCommand = (toAddress, fromAddress, subject, body) => {
   });
 };
 
-const run = async (toEmail,subject, body) => {
-  const sendEmailCommand = createSendEmailCommand(
-    // "eleganthacker420@gmail.com",
-      toEmail,
-    "preet@devnet.co.in",
-    subject,
-    body
-  );
+const run = async (toEmail, subject, body) => {
+  // If AWS keys are not configured, skip gracefully
+  if (!process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY || process.env.AWS_ACCESS_KEY === "disabled") {
+    console.log("[Email Service] AWS SES disabled or credentials not provided. Skipping email dispatch.");
+    return null;
+  }
 
   try {
-    return await sesClient.send(sendEmailCommand);
-  } catch (caught) {
-    if (caught instanceof Error && caught.name === "MessageRejected") {
-      const messageRejectedError = caught;
-      return messageRejectedError;
-    }
-    throw caught;
+    const sendEmailCommand = createSendEmailCommand(
+      toEmail,
+      "preet@devnet.co.in",
+      subject,
+      body
+    );
+
+    const res = await sesClient.send(sendEmailCommand);
+    console.log(`[Email Service] Successfully sent email to ${toEmail}`);
+    return res;
+  } catch (error) {
+    console.warn(`[Email Service] Failed to send email to ${toEmail} (Non-blocking):`, error.message);
+    return null;
   }
 };
 
