@@ -7,6 +7,9 @@ import { createAdapter } from "@socket.io/redis-adapter";
 // Global map to track who is currently connected
 const userSocketMap = new Map();
 
+// In-memory room store for real-time whiteboard collaboration
+const whiteboardRooms = new Map(); // roomId -> Map(recordId -> record)
+
 const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
@@ -46,9 +49,11 @@ const initializeSocket = (server) => {
      * REGISTER USER ONLINE STATUS & CATCH UP DELIVERIES
      */
     socket.on("registerUser", async (userId) => {
-      userSocketMap.set(userId, socket.id);
-      io.emit("userOnline", userId);
-      console.log(`User ${userId} is Online`);
+      if (!userId) return;
+      const uidStr = userId.toString();
+      userSocketMap.set(uidStr, socket.id);
+      io.emit("userOnline", uidStr);
+      console.log(`User ${uidStr} is Online`);
 
       // OFFLINE DELIVERY CATCH-UP ROUTINE
       try {
@@ -120,8 +125,10 @@ const initializeSocket = (server) => {
      * CHECK IF TARGET USER IS ONLINE
      */
     socket.on("checkOnlineStatus", (targetUserId) => {
-      const isOnline = userSocketMap.has(targetUserId);
-      socket.emit("onlineStatus", { userId: targetUserId, isOnline });
+      if (!targetUserId) return;
+      const tidStr = targetUserId.toString();
+      const isOnline = userSocketMap.has(tidStr);
+      socket.emit("onlineStatus", { userId: tidStr, isOnline });
     });
 
     /**
@@ -419,25 +426,78 @@ const initializeSocket = (server) => {
     // WHITEBOARD REAL-TIME SYNC
     // ==========================================
     socket.on("joinWhiteboard", ({ roomId }) => {
+      if (!roomId) return;
       socket.join(`whiteboard_${roomId}`);
       console.log(`Socket ${socket.id} joined whiteboard: ${roomId}`);
+
+      // 1. Send existing whiteboard snapshot to newly joined peer
+      if (whiteboardRooms.has(roomId)) {
+        const roomMap = whiteboardRooms.get(roomId);
+        const snapshot = Array.from(roomMap.values());
+        if (snapshot.length > 0) {
+          socket.emit("whiteboardSnapshot", { snapshot });
+        }
+      }
+
+      // 2. Notify other peers in this room that a new collaborator joined
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardPeerJoined", { peerSocketId: socket.id });
     });
 
     socket.on("leaveWhiteboard", ({ roomId }) => {
+      if (!roomId) return;
       socket.leave(`whiteboard_${roomId}`);
       console.log(`Socket ${socket.id} left whiteboard: ${roomId}`);
     });
 
     socket.on("whiteboardUpdate", ({ roomId, update }) => {
+      if (!roomId || !update) return;
+
+      // Update backend in-memory snapshot
+      if (!whiteboardRooms.has(roomId)) {
+        whiteboardRooms.set(roomId, new Map());
+      }
+      const roomMap = whiteboardRooms.get(roomId);
+
+      if (update.added) {
+        for (const record of Object.values(update.added)) {
+          if (record && record.id) roomMap.set(record.id, record);
+        }
+      }
+      if (update.updated) {
+        for (const [_from, to] of Object.values(update.updated)) {
+          if (to && to.id) roomMap.set(to.id, to);
+        }
+      }
+      if (update.removed) {
+        for (const id of Object.keys(update.removed)) {
+          roomMap.delete(id);
+        }
+      }
+
       // Broadcast the drawing changes to everyone ELSE in this specific whiteboard room
       socket.to(`whiteboard_${roomId}`).emit("whiteboardUpdateReceived", update);
     });
 
-    // ✨ NEW: Whiteboard Invitation Logic
+    socket.on("whiteboardSendSync", ({ roomId, snapshot }) => {
+      if (!roomId || !Array.isArray(snapshot)) return;
+      if (!whiteboardRooms.has(roomId)) {
+        whiteboardRooms.set(roomId, new Map());
+      }
+      const roomMap = whiteboardRooms.get(roomId);
+      for (const record of snapshot) {
+        if (record && record.id) {
+          roomMap.set(record.id, record);
+        }
+      }
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardSnapshot", { snapshot });
+    });
+
+    // ✨ Whiteboard Invitation Logic
     socket.on("whiteboard-invite", ({ targetUserId, roomId, senderInfo }) => {
-      const receiverSocketId = userSocketMap.get(targetUserId);
+      if (!targetUserId) return;
+      const tidStr = targetUserId.toString();
+      const receiverSocketId = userSocketMap.get(tidStr);
       if (receiverSocketId) {
-        // Send an invitation to the target user if they are online
         io.to(receiverSocketId).emit("whiteboard-invite-received", {
           roomId,
           senderInfo,
@@ -446,9 +506,10 @@ const initializeSocket = (server) => {
     });
 
     socket.on("whiteboard-invite-rejected", ({ senderId, rejecterInfo }) => {
-      const senderSocketId = userSocketMap.get(senderId);
+      if (!senderId) return;
+      const sidStr = senderId.toString();
+      const senderSocketId = userSocketMap.get(sidStr);
       if (senderSocketId) {
-        // Notify the original sender that their invitation was rejected
         io.to(senderSocketId).emit("whiteboard-invite-was-rejected", { rejecterInfo });
       }
     });
