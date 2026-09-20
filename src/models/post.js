@@ -61,7 +61,7 @@ const postSchema = new mongoose.Schema(
     // 🔥 THE MAGIC FIELD: This tells the frontend how to render the post
     type: {
       type: String,
-      enum: ["devlog", "article", "question", "launch"],
+      enum: ["devlog", "article", "question", "launch", "architecture"],
       default: "devlog",
       required: true,
     },
