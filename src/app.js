@@ -24,6 +24,7 @@ import chatRouter from "./routes/chat.js";
 import uploadRouter from "./routes/upload.js";
 import postRouter from "./routes/post.js";
 import adminRouter from "./routes/admin.js";
+import whiteboardRouter from "./routes/whiteboard.js";
 import "./utils/cronjob.js";
 import startKeepAlive from "./utils/keepAlive.js";
 
@@ -76,6 +77,7 @@ app.use("/", chatRouter);
 app.use("/", uploadRouter);
 app.use("/", postRouter);
 app.use("/", adminRouter);
+app.use("/", whiteboardRouter);
 
 const PORT = process.env.PORT || 3000;
 connectDB()
