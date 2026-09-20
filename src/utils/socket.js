@@ -446,13 +446,65 @@ const initializeSocket = (server) => {
     socket.on("leaveWhiteboard", ({ roomId }) => {
       if (!roomId) return;
       socket.leave(`whiteboard_${roomId}`);
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardPeerLeft", { peerSocketId: socket.id });
       console.log(`Socket ${socket.id} left whiteboard: ${roomId}`);
     });
 
+    // 1. Live Element Draw (Real-time creation)
+    socket.on("whiteboardDraw", ({ roomId, element }) => {
+      if (!roomId || !element || !element.id) return;
+      if (!whiteboardRooms.has(roomId)) {
+        whiteboardRooms.set(roomId, new Map());
+      }
+      whiteboardRooms.get(roomId).set(element.id, element);
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardDraw", element);
+    });
+
+    // 2. Element Update (Move, resize, text change)
+    socket.on("whiteboardUpdateElement", ({ roomId, element }) => {
+      if (!roomId || !element || !element.id) return;
+      if (!whiteboardRooms.has(roomId)) {
+        whiteboardRooms.set(roomId, new Map());
+      }
+      whiteboardRooms.get(roomId).set(element.id, element);
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardUpdateElement", element);
+    });
+
+    // 3. Delete Elements
+    socket.on("whiteboardDeleteElements", ({ roomId, elementIds }) => {
+      if (!roomId || !Array.isArray(elementIds)) return;
+      const roomMap = whiteboardRooms.get(roomId);
+      if (roomMap) {
+        for (const id of elementIds) {
+          roomMap.delete(id);
+        }
+      }
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardDeleteElements", elementIds);
+    });
+
+    // 4. Clear Canvas
+    socket.on("whiteboardClear", ({ roomId }) => {
+      if (!roomId) return;
+      const roomMap = whiteboardRooms.get(roomId);
+      if (roomMap) {
+        roomMap.clear();
+      }
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardClear");
+    });
+
+    // 5. Multiplayer Cursor Streaming
+    socket.on("whiteboardCursor", ({ roomId, cursor }) => {
+      if (!roomId || !cursor) return;
+      socket.to(`whiteboard_${roomId}`).emit("whiteboardCursorUpdate", {
+        peerId: socket.id,
+        cursor,
+      });
+    });
+
+    // 6. Legacy/Diff Updates (Backward compatibility)
     socket.on("whiteboardUpdate", ({ roomId, update }) => {
       if (!roomId || !update) return;
 
-      // Update backend in-memory snapshot
       if (!whiteboardRooms.has(roomId)) {
         whiteboardRooms.set(roomId, new Map());
       }
@@ -474,7 +526,6 @@ const initializeSocket = (server) => {
         }
       }
 
-      // Broadcast the drawing changes to everyone ELSE in this specific whiteboard room
       socket.to(`whiteboard_${roomId}`).emit("whiteboardUpdateReceived", update);
     });
 
