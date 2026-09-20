@@ -20,7 +20,7 @@ export const getChat = async (req, res) => {
       participants: { $all: [userId, targetUserId] },
     })
       .populate("messages.senderId", "firstName lastName")
-      .populate("participants", "firstName lastName");
+      .populate("participants", "firstName lastName photoUrl");
 
     if (!chat) {
       chat = await Chat.create({
@@ -31,7 +31,7 @@ export const getChat = async (req, res) => {
       // Populate after creation
       chat = await Chat.findById(chat._id)
         .populate("messages.senderId", "firstName lastName")
-        .populate("participants", "firstName lastName");
+        .populate("participants", "firstName lastName photoUrl");
     }
 
     // ✅ Mark messages as delivered (REST fallback)
@@ -57,7 +57,7 @@ export const getChat = async (req, res) => {
     // Fetch updated chat
     chat = await Chat.findById(chat._id)
       .populate("messages.senderId", "firstName lastName")
-      .populate("participants", "firstName lastName");
+      .populate("participants", "firstName lastName photoUrl");
 
     res.json({
       chat,
